@@ -52,17 +52,21 @@ int main() {
 
         // Perform the request
         result = curl_easy_perform(curl);
-        long responseCode = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
         if (result == CURLE_OK) {
-            // Print the response data
-            std::cout << "Response from https://github.com" << std::endl;
-            std::cout << "Response Size: " << responseString.size() << " bytes\n" 
-                      << "Response Code: " << responseCode << std::endl;
+            // Get the HTTP response code
+            long responseCode = 0;
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
+            if (responseCode == 200) {
+                // Print the response data
+                std::cout << "Response from https://github.com" << std::endl;
+                std::cout << "Response Size: " << responseString.size() << " bytes\n" 
+                          << "Response Code: " << responseCode << std::endl;
+            } else {
+                std::cerr << "Response error code: " << responseCode << std::endl;
+            }
         } else {
             std::cerr << "curl_easy_perform(curl) failed: " 
-                    << curl_easy_strerror(result) << std::endl;
-            return (int)result;
+                      << curl_easy_strerror(result) << std::endl;
         }
 
         // Clean up the curl handle
