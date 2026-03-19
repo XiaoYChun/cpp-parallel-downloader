@@ -46,20 +46,30 @@ int main() {
         std::string responseString;
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &responseString);
 
+        // Follow redirects
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); 
+        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+
         // Perform the request
         result = curl_easy_perform(curl);
-        if (result != CURLE_OK) {
-            std::cerr << "curl_global_init() failed: " 
+        long responseCode = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
+        if (result == CURLE_OK) {
+            // Print the response data
+            std::cout << "Response from https://github.com" << std::endl;
+            std::cout << "Response Size: " << responseString.size() << " bytes\n" 
+                      << "Response Code: " << responseCode << std::endl;
+        } else {
+            std::cerr << "curl_easy_perform(curl) failed: " 
                     << curl_easy_strerror(result) << std::endl;
             return (int)result;
-        } else {
-            // Print the response data
-            std::cout << "Response from https://github.com:" << std::endl;
-            // std::cout << responseString << std::endl;
         }
 
         // Clean up the curl handle
         curl_easy_cleanup(curl);
+    } else {
+        std::cerr << "curl_easy_init() failed" << std::endl;
+        return -1;
     }
 
 
