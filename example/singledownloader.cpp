@@ -32,11 +32,14 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb,
         }
     } else {
         std::cerr << "WriteCallback: OutFile Doesn't Exist Or Can't Open!" << std::endl;
+        return 0;
     }
     
     return totalSize;
 } 
 
+// cout can change position
+// by error code, Main can cout different situation
 bool Download(const std::string& targetURL, const std::string& savePath) {
     if (targetURL.empty() || savePath.empty()) {
         std::cerr << "File Path Error: " << std::endl
@@ -72,6 +75,7 @@ bool Download(const std::string& targetURL, const std::string& savePath) {
                           << "Response data, please click: " << savePath << std::endl;
             } else {
                 std::cerr << "Response error code: " << responseCode << std::endl;
+                return false;
             }
         } else {
             std::cerr << "curl_easy_perform(curl) failed: " 
@@ -98,7 +102,10 @@ int main() {
 
     std::string targetURL = "https://github.com";
     std::string savePath = "D:/MyFiles/UniversityFiles/CareerInformation/cpp-parallel-downloader/output/singledownloader.txt";
-    Download(targetURL, savePath);
+    
+    if (!Download(targetURL, savePath)) {
+        std::cerr << "Main: Download Failed!" << std::endl;
+    }
 
     curl_global_cleanup();
 
