@@ -46,6 +46,7 @@ void Download(CURLcode result, std::string targetPath, std::string savePath) {
 
     CURL *curl = curl_easy_init();
     if (curl) {
+        // curl is writed for C language, so don't use C++ string
         curl_easy_setopt(curl, CURLOPT_URL, targetPath.c_str());
         
         std::ofstream saveFile(savePath, std::ios::binary | std::ios::trunc);
