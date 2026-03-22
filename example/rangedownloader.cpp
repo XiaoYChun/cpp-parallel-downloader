@@ -80,13 +80,13 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb,
     size_t totalSize = size * nmemb;
     
     FileInfo *saveFileInfo = static_cast<FileInfo*>(userp);
-    std::fstream *outFile = saveFileInfo->outFile;
-    if (saveFileInfo && outFile && outFile->is_open()) {
+    if (saveFileInfo && saveFileInfo->outFile && saveFileInfo->outFile->is_open()) {
+        std::fstream *outFile = saveFileInfo->outFile;
         outFile->seekp(saveFileInfo->offset, std::ios::beg);
         outFile->write(static_cast<char*>(contents), totalSize);
     } else {
         std::cerr << "[WriteCallback] File Operations Failed!" << std::endl;
-        return -1;
+        return 0;
     }
     
     return totalSize;
@@ -121,15 +121,22 @@ long long GetRemoteFileSize(const std::string& targetURL) {
         if (curl_easy_perform(curl) == CURLE_OK) {
             curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &fileSize);
             if (fileSize == -1) {
+                curl_easy_cleanup(curl);
                 OutputInfo(ResponseCode::RemoteFileSizeError);
+                std::cerr << "[GetRemoteFileSize] File Size == -1!" << std::endl;
+                return -1;
             }
         } else {
+            curl_easy_cleanup(curl);
             OutputInfo(ResponseCode::CurlPerformError);
+            std::cerr << "[GetRemoteFileSize] curl_easy_perform Failed!" << std::endl;
+            return -1;
         }
 
         curl_easy_cleanup(curl);
     } else {
         OutputInfo(ResponseCode::CurlInitError);
+        std::cerr << "[GetRemoteFileSize] curl_init_perform Failed!" << std::endl;
     }
 
     return static_cast<long long>(fileSize);
@@ -137,6 +144,7 @@ long long GetRemoteFileSize(const std::string& targetURL) {
 
 ResponseCode RangeDownload(CurlOpt& curlOpt) {
     if (curlOpt.targetURL.empty() || curlOpt.savePath.empty()) {
+        std::cerr << "[RangeDownload] TargetURL Or Save Path Is Empty!" << std::endl;
         return ResponseCode::CurlOptError;
     }
 
@@ -151,11 +159,14 @@ ResponseCode RangeDownload(CurlOpt& curlOpt) {
             curlOpt.saveFileInfo.outFile->write("\0", 1);
             curlOpt.saveFileInfo.outFile->seekp(0, std::ios::beg);
         } else {
+            curl_easy_cleanup(curl);
+            std::cerr << "[RangeDownload] File Open Failed!" << std::endl;
             return ResponseCode::FileError;
         }
 
         long long startOffset = 0;
         while (startOffset < fileSize) {
+            curlOpt.saveFileInfo.offset = startOffset;
             long long endOffset = std::min<long long>(
                 static_cast<long long>(startOffset + curlOpt.rangeSize - 1),
                 static_cast<long long>(fileSize - 1)
@@ -170,18 +181,22 @@ ResponseCode RangeDownload(CurlOpt& curlOpt) {
                 long responseCode = 0;
                 curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
                 if (responseCode != 206) {
+                    curl_easy_cleanup(curl);
+                    std::cerr << "[RangeDownload] Response Code Error! responseCode: " << responseCode << std::endl;
                     return ResponseCode::RemoteCodeError;
                 } 
             } else {
+                curl_easy_cleanup(curl);
+                std::cerr << "[RangeDownload] curl_easy_perform Failed!" << std::endl;
                 return ResponseCode::CurlPerformError;
             }
         
             startOffset = endOffset + 1;
-            curlOpt.saveFileInfo.offset = startOffset;
         }
         
         curl_easy_cleanup(curl);
     } else {
+        std::cerr << "[RangeDownload] curl_easy_init Failed!" << std::endl;
         return ResponseCode::CurlInitError;
     }
 
@@ -198,11 +213,11 @@ int main() {
 
     std::string targetURL = "https://www.baidu.com/robots.txt";
     std::string savePath = "D:/MyFiles/UniversityFiles/CareerInformation/cpp-parallel-downloader/output/rangedownloader.txt";
-    std::fstream *saveFile = new std::fstream(savePath, std::ios::binary | std::ios::trunc | std::ios::out | std::ios::in);
-    if (!saveFile || !saveFile->is_open()) {
+    std::fstream saveFile(savePath, std::ios::binary | std::ios::trunc | std::ios::out | std::ios::in);
+    if (!saveFile || !saveFile.is_open()) {
         return -1;
     }
-    FileInfo saveFileInfo{saveFile, 0};
+    FileInfo saveFileInfo{&saveFile, 0};
     int rangeSize = 1024;
     CurlOpt curlOpt{targetURL, savePath, saveFileInfo, rangeSize};
     
