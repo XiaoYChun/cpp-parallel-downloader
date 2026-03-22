@@ -104,7 +104,8 @@ ResponseCode CurlOptSet(CURL* curl, const CurlOpt& curlOpt) {
 
 long long GetRemoteFileSize(const std::string& targetURL) {
     CURL *curl = curl_easy_init();
-    long long fileSize = 0;
+    // CURLINFO_CONTENT_LENGTH_DOWNLOAD needs double
+    double fileSize = 0;
     
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, targetURL.c_str());
@@ -123,7 +124,7 @@ long long GetRemoteFileSize(const std::string& targetURL) {
         OutputInfo(ResponseCode::CurlInitError);
     }
 
-    return fileSize;
+    return static_cast<long long>(fileSize);
 }
 
 ResponseCode RangeDownload(CurlOpt& curlOpt) {
