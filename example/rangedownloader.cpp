@@ -23,7 +23,8 @@ enum class ResponseCode {
     CurlOptError,
     RemoteCodeError,
     CurlPerformError,
-    CurlInitError
+    CurlInitError,
+    RemoteFileSizeError
 };
 
 // 对于结构体，内部是否应该保存指针比较好
@@ -62,6 +63,9 @@ void OutputInfo(const ResponseCode& responseCode) {
             break;
         case ResponseCode::CurlInitError:
             std::cout << "Curl Init Error!" << std::endl;
+            break;
+        case ResponseCode::RemoteFileSizeError:
+            std::cout << "Remote File Size Error!" << std::endl;
             break;
         
         
@@ -108,6 +112,7 @@ long long GetRemoteFileSize(const std::string& targetURL) {
     double fileSize = 0;
     
     if (curl) {
+        // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         curl_easy_setopt(curl, CURLOPT_URL, targetURL.c_str());
 
         curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
@@ -115,6 +120,9 @@ long long GetRemoteFileSize(const std::string& targetURL) {
 
         if (curl_easy_perform(curl) == CURLE_OK) {
             curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &fileSize);
+            if (fileSize == -1) {
+                OutputInfo(ResponseCode::RemoteFileSizeError);
+            }
         } else {
             OutputInfo(ResponseCode::CurlPerformError);
         }
@@ -161,7 +169,6 @@ ResponseCode RangeDownload(CurlOpt& curlOpt) {
             if (result == CURLE_OK) {
                 long responseCode = 0;
                 curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
-                std::cout << responseCode << " ";
                 if (responseCode != 206) {
                     return ResponseCode::RemoteCodeError;
                 } 
@@ -189,7 +196,7 @@ int main() {
         return static_cast<int>(globalResult);
     }
 
-    std::string targetURL = "https://github.com";
+    std::string targetURL = "https://www.baidu.com/robots.txt";
     std::string savePath = "D:/MyFiles/UniversityFiles/CareerInformation/cpp-parallel-downloader/output/rangedownloader.txt";
     std::fstream *saveFile = new std::fstream(savePath, std::ios::binary | std::ios::trunc | std::ios::out | std::ios::in);
     if (!saveFile || !saveFile->is_open()) {
