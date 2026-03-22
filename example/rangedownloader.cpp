@@ -27,8 +27,29 @@ enum class ResponseCode {
     RemoteFileSizeError
 };
 
-// 对于结构体，内部是否应该保存指针比较好
-// 因为实际上在初始化的时候，很容易浪费空间，即 copy 带来额外消耗
+class CurlEasyHandle {
+public:
+    CurlEasyHandle() {
+        curl = curl_easy_init();
+    }
+    ~CurlEasyHandle() {
+        if (curl) curl_easy_cleanup(curl);
+        else std::cerr << "[~CurlEasyHandle] Curl Doesn't Exit!" << std::endl;
+    }
+
+     // delete copy
+    CurlEasyHandle(const CurlEasyHandle&) = delete;
+    CurlEasyHandle& operator=(const CurlEasyHandle&) = delete;
+
+
+    CURL* GetCurl() {
+        return curl;
+    }
+
+private:
+    CURL *curl;
+
+};
 
 // need to maintain an offset
 // for seeking and writing at specific positions
@@ -107,33 +128,29 @@ ResponseCode CurlOptSet(CURL* curl, const CurlOpt& curlOpt) {
 }
 
 long long GetRemoteFileSize(const std::string& targetURL) {
-    CURL *curl = curl_easy_init();
+    CurlEasyHandle curlHandle;
     // CURLINFO_CONTENT_LENGTH_DOWNLOAD needs double
     double fileSize = 0;
     
-    if (curl) {
+    if (curlHandle.GetCurl()) {
         // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-        curl_easy_setopt(curl, CURLOPT_URL, targetURL.c_str());
+        curl_easy_setopt(curlHandle.GetCurl(), CURLOPT_URL, targetURL.c_str());
 
-        curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
-        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curlHandle.GetCurl(), CURLOPT_NOBODY, 1L);
+        curl_easy_setopt(curlHandle.GetCurl(), CURLOPT_FOLLOWLOCATION, 1L);
 
-        if (curl_easy_perform(curl) == CURLE_OK) {
-            curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &fileSize);
+        if (curl_easy_perform(curlHandle.GetCurl()) == CURLE_OK) {
+            curl_easy_getinfo(curlHandle.GetCurl(), CURLINFO_CONTENT_LENGTH_DOWNLOAD, &fileSize);
             if (fileSize == -1) {
-                curl_easy_cleanup(curl);
                 OutputInfo(ResponseCode::RemoteFileSizeError);
                 std::cerr << "[GetRemoteFileSize] File Size == -1!" << std::endl;
                 return -1;
             }
         } else {
-            curl_easy_cleanup(curl);
             OutputInfo(ResponseCode::CurlPerformError);
             std::cerr << "[GetRemoteFileSize] curl_easy_perform Failed!" << std::endl;
             return -1;
         }
-
-        curl_easy_cleanup(curl);
     } else {
         OutputInfo(ResponseCode::CurlInitError);
         std::cerr << "[GetRemoteFileSize] curl_init_perform Failed!" << std::endl;
@@ -148,9 +165,9 @@ ResponseCode RangeDownload(CurlOpt& curlOpt) {
         return ResponseCode::CurlOptError;
     }
 
-    CURL *curl = curl_easy_init();
-    if (curl) {
-        CurlOptSet(curl, curlOpt);
+    CurlEasyHandle curlHandle;
+    if (curlHandle.GetCurl()) {
+        CurlOptSet(curlHandle.GetCurl(), curlOpt);
 
         long long fileSize = GetRemoteFileSize(curlOpt.targetURL);
         // for seekp
@@ -159,7 +176,6 @@ ResponseCode RangeDownload(CurlOpt& curlOpt) {
             curlOpt.saveFileInfo.outFile->write("\0", 1);
             curlOpt.saveFileInfo.outFile->seekp(0, std::ios::beg);
         } else {
-            curl_easy_cleanup(curl);
             std::cerr << "[RangeDownload] File Open Failed!" << std::endl;
             return ResponseCode::FileError;
         }
@@ -174,27 +190,23 @@ ResponseCode RangeDownload(CurlOpt& curlOpt) {
             
             std::string rangeStr = std::to_string(startOffset) + "-" 
                                    + std::to_string(endOffset);
-            curl_easy_setopt(curl, CURLOPT_RANGE, rangeStr.c_str());
+            curl_easy_setopt(curlHandle.GetCurl(), CURLOPT_RANGE, rangeStr.c_str());
 
-            CURLcode result = curl_easy_perform(curl);
+            CURLcode result = curl_easy_perform(curlHandle.GetCurl());
             if (result == CURLE_OK) {
                 long responseCode = 0;
-                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &responseCode);
+                curl_easy_getinfo(curlHandle.GetCurl(), CURLINFO_RESPONSE_CODE, &responseCode);
                 if (responseCode != 206) {
-                    curl_easy_cleanup(curl);
                     std::cerr << "[RangeDownload] Response Code Error! responseCode: " << responseCode << std::endl;
                     return ResponseCode::RemoteCodeError;
                 } 
             } else {
-                curl_easy_cleanup(curl);
                 std::cerr << "[RangeDownload] curl_easy_perform Failed!" << std::endl;
                 return ResponseCode::CurlPerformError;
             }
         
             startOffset = endOffset + 1;
         }
-        
-        curl_easy_cleanup(curl);
     } else {
         std::cerr << "[RangeDownload] curl_easy_init Failed!" << std::endl;
         return ResponseCode::CurlInitError;
