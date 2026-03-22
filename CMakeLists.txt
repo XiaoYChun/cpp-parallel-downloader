@@ -7,6 +7,7 @@ find_package(CURL REQUIRED)
 set (EXAMPLE_FILE
     "example/curlgetexample.cpp"
     "example/singledownloader.cpp"
+    "example/rangedownloader.cpp"
 )
 foreach (example_src_file ${EXAMPLE_FILE})
     # Set target name to example name
