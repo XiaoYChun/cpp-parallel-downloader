@@ -34,13 +34,29 @@ public:
     }
     ~CurlEasyHandle() {
         if (curl) curl_easy_cleanup(curl);
-        else std::cerr << "[~CurlEasyHandle] Curl Doesn't Exit!" << std::endl;
     }
 
      // delete copy
     CurlEasyHandle(const CurlEasyHandle&) = delete;
     CurlEasyHandle& operator=(const CurlEasyHandle&) = delete;
 
+    // move
+    CurlEasyHandle(CurlEasyHandle&& other) noexcept {
+        this->curl = other.curl;
+        other.curl = nullptr;
+    }
+    CurlEasyHandle& operator=(CurlEasyHandle&& other) noexcept {
+        // self move check
+        if (this != &other) {
+            if (this->curl) {
+                curl_easy_cleanup(curl);
+            }
+            this->curl = other.curl;
+            other.curl = nullptr;
+        }
+
+        return *this;
+    }
 
     CURL* GetCurl() {
         return curl;
@@ -48,7 +64,6 @@ public:
 
 private:
     CURL *curl;
-
 };
 
 // need to maintain an offset
