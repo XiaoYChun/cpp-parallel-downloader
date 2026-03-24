@@ -75,6 +75,10 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb,
         std::fstream *outFile = saveFileInfo->outFile;
         outFile->seekp(saveFileInfo->offset, std::ios::beg);
         outFile->write(static_cast<char*>(contents), totalSize);
+        if (!outFile) {
+            std::cerr << "[WriteCallback] File Writed Failed!" << std::endl;
+            return 0;
+        }
     } else {
         std::cerr << "[WriteCallback] File Operations Failed!" << std::endl;
         return 0;
@@ -109,23 +113,26 @@ long long GetRemoteFileSize(const std::string& targetURL) {
         }
     } else {
         std::cerr << "[GetRemoteFileSize] curl_init_perform Failed!" << std::endl;
+        return -1;
     }
 
     return static_cast<long long>(fileSize);
 }
 
-
-bool RangeDownload(CurlOpt& curlOpt, std::atomic<int>& taskCount) {
+bool ThreadDownload(CurlOpt& curlOpt, std::atomic<int>& taskCount, std::atomic<bool>& errorFlag) {
     if (curlOpt.targetURL.empty() || curlOpt.savePath.empty()) {
         std::cerr << "[RangeDownload] TargetURL Or Save Path Is Empty!" << std::endl;
+        errorFlag = true;
         return false;
     }
 
     // dynamic get task, can flag the startOffset
     int currentTask;
     // each thread have own fstream
-    std::fstream threadFile(curlOpt.savePath, std::ios::binary | std::ios::trunc | std::ios::out | std::ios::in);
+    std::fstream threadFile(curlOpt.savePath, std::ios::binary | std::ios::out | std::ios::in);
     if (!threadFile || !threadFile.is_open()) {
+        std::cerr << "[RangeDownload] Thread File Stream Error!" << std::endl;
+        errorFlag = true;
         return false;
     }
     FileInfo threadFileInfo{&threadFile, 0, curlOpt.saveFileInfo.fileSize};
@@ -150,23 +157,31 @@ bool RangeDownload(CurlOpt& curlOpt, std::atomic<int>& taskCount) {
             curl_easy_setopt(curlHandle.GetCurl(), CURLOPT_FOLLOWLOCATION, 1L); 
             curl_easy_setopt(curlHandle.GetCurl(), CURLOPT_MAXREDIRS, 5L);
 
+            char errorBuffer[CURL_ERROR_SIZE];
+            curl_easy_setopt(curlHandle.GetCurl(), CURLOPT_ERRORBUFFER, errorBuffer);
+
             CURLcode result = curl_easy_perform(curlHandle.GetCurl());
             if (result == CURLE_OK) {
                 long responseCode = 0;
                 curl_easy_getinfo(curlHandle.GetCurl(), CURLINFO_RESPONSE_CODE, &responseCode);
                 if (responseCode != 206) {
                     std::cerr << "[RangeDownload] Response Code Error! responseCode: " << responseCode << std::endl;
+                    errorFlag = true;
                     return false;
                 } else {
                     std::cout << "[RangeDownload] Success to download from " 
                               << startOffset << " to " << endOffset << "!" << std::endl;
                 }
             } else {
-                std::cerr << "[RangeDownload] curl_easy_perform Failed!" << std::endl;
+                std::cerr << "[RangeDownload] curl_easy_perform Failed! Now Try To Download From " 
+                          << startOffset << " to " << endOffset << "!" << std::endl
+                          << "Libcurl Error Details: " << errorBuffer << std::endl;
+                errorFlag = true;
                 return false;
             }
         } else {
             std::cerr << "[RangeDownload] curl_easy_init Failed!" << std::endl;
+            errorFlag = true;
             return false;
         }
     } 
@@ -186,34 +201,45 @@ int main() {
     std::string savePath = "D:/MyFiles/UniversityFiles/CareerInformation/cpp-parallel-downloader/output/paralleldownloader.txt";
     std::fstream saveFile(savePath, std::ios::binary | std::ios::trunc | std::ios::out | std::ios::in);
     if (!saveFile || !saveFile.is_open()) {
+        curl_global_cleanup();
         return -1;
     }
 
     long long fileSize = GetRemoteFileSize(targetURL);
+    if (fileSize <= 0) {
+        std::cerr << "[Main] Remote File Size Error!" << std::endl;
+        curl_global_cleanup();
+        return -1;
+    }
     if (saveFile.is_open()) {
         saveFile.seekp(fileSize - 1, std::ios::beg);
         saveFile.write("\0", 1);
         saveFile.seekp(0, std::ios::beg);
     } else {
         std::cerr << "[Main] File Open Failed!" << std::endl;
-        return false;
+        curl_global_cleanup();
+        return -1;
     }
     FileInfo saveFileInfo{&saveFile, 0, fileSize};
 
     int rangeSize = 256;
-    int totalCount = fileSize / rangeSize + 1;
+    int totalCount = (fileSize + rangeSize - 1) / rangeSize;
     CurlOpt curlOpt{targetURL, savePath, saveFileInfo, rangeSize, totalCount};
     
     std::vector<std::thread> threads;
     std::atomic<int> taskCount{0};      // the symbol of total task count
     int threadsNum = 8;
+    std::atomic<bool> errorFlag{false};
     for (int i = 0; i < threadsNum; i++) {
-        threads.emplace_back(RangeDownload, std::ref(curlOpt), std::ref(taskCount));
+        threads.emplace_back(ThreadDownload, std::ref(curlOpt), std::ref(taskCount), std::ref(errorFlag));
     }
     for (auto& t : threads) {
         if (t.joinable()) {
             t.join();
         }
+    }
+    if (errorFlag) {
+        std::cerr << "[Main] Some Thread Error!" << std::endl;
     }
 
     curl_global_cleanup();
