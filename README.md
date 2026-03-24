@@ -4,6 +4,7 @@
 
 ## 1. 项目背景与目标
 
+
 本项目是“本地开发与远程服务器工作流工具系统”的基础模块之一，主要用于提供文件传输能力中的**下载功能基础实现**。
 
 本阶段目标：
@@ -39,7 +40,6 @@
 
 ## 3. 核心技术点
 
----
 
 ### 3.1 libcurl 使用模型
 
@@ -57,7 +57,6 @@
 * 使用 `CURLOPT_WRITEDATA` 将用户数据传入 callback
 * `CURLE_OK` 仅表示网络层成功，不代表 HTTP 成功
 
----
 
 ### 3.2 HTTP Range 机制
 
@@ -78,7 +77,6 @@ Range: bytes=start-end
 * 每个线程负责一个 Range 请求
 * 每个 Range 对应文件中的一个区间
 
----
 
 ### 3.3 文件写入策略
 
@@ -104,7 +102,6 @@ Range: bytes=start-end
 
 最终选择：**独立 fstream**
 
----
 
 ### 3.4 多线程任务模型
 
@@ -130,8 +127,6 @@ Range: bytes=start-end
 * 发起 Range 请求
 * 写入对应文件位置
 
----
-
 ### 3.5 分块策略
 
 分块逻辑：
@@ -155,7 +150,6 @@ end = min(start + rangeSize - 1, fileSize - 1)
 * 不重复
 * 不遗漏
 
----
 
 ### 3.6 RAII 在项目中的应用
 
@@ -179,7 +173,6 @@ class CurlEasyHandle {
 
 ## 4. 关键设计决策
 
----
 
 ### 决策 1：文件写入方式
 
@@ -192,7 +185,6 @@ class CurlEasyHandle {
 * 减少临界区问题
 * 更易调试与验证
 
----
 
 ### 决策 2：任务分发方式
 
@@ -205,7 +197,6 @@ class CurlEasyHandle {
 * 简化线程管理
 * 避免线程空闲
 
----
 
 ### 决策 3：错误处理策略
 
@@ -262,7 +253,7 @@ class CurlEasyHandle {
 
 ## 8. 开发过程中遇到的问题与经验
 
-### 1. 文件被覆盖问题（关键 bug）
+### 8.1. 文件被覆盖问题（关键 bug）
 
 原因：
 
@@ -277,9 +268,8 @@ class CurlEasyHandle {
 * 仅主线程使用 trunc
 * 子线程使用读写模式打开
 
----
 
-### 2. 分块数量计算错误
+### 8.2. 分块数量计算错误
 
 原因：
 
@@ -293,9 +283,8 @@ class CurlEasyHandle {
 
 * 使用向上取整公式
 
----
 
-### 3. callback 返回值错误
+### 8.3. callback 返回值错误
 
 问题：
 
@@ -309,9 +298,8 @@ class CurlEasyHandle {
 
 * 返回实际处理字节数或 0
 
----
 
-### 4. 多线程写文件冲突风险
+### 8.4. 多线程写文件冲突风险
 
 问题：
 
@@ -321,9 +309,8 @@ class CurlEasyHandle {
 
 * 每线程独立文件流
 
----
 
-### 5. `curl_easy_perform` 成功 ≠ HTTP 成功
+### 8.5. `curl_easy_perform` 成功 ≠ HTTP 成功
 
 问题：
 
