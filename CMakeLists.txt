@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 find_package(CURL REQUIRED)
 
 set (EXAMPLE_FILE
+    "paralleldownloader.cpp"
     "example/curlgetexample.cpp"
     "example/singledownloader.cpp"
     "example/rangedownloader.cpp"
